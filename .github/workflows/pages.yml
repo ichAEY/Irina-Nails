@@ -33,7 +33,7 @@ jobs:
           cp favicon.svg template/public/favicon.svg
           printf '' > template/public/noop.js
           mkdir -p template/public/assets
-          unzip -q assets.zip -d template/public/assets
+          cp assets/*.webp template/public/assets/
 
       - name: Setup Node
         uses: actions/setup-node@v4
