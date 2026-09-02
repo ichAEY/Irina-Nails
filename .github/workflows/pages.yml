@@ -77,6 +77,29 @@ jobs:
         working-directory: template
         run: npx next build
 
+      - name: Fix GitHub Pages project paths
+        working-directory: template
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          prefix = '/Irina-Nails'
+          replacements = {
+              b'/_next/': (prefix + '/_next/').encode(),
+              b'/assets/': (prefix + '/assets/').encode(),
+              b'/favicon.svg': (prefix + '/favicon.svg').encode(),
+              b'/noop.js': (prefix + '/noop.js').encode(),
+          }
+          for p in Path('out').rglob('*'):
+              if not p.is_file():
+                  continue
+              data = p.read_bytes()
+              original = data
+              for old, new in replacements.items():
+                  data = data.replace(old, new)
+              if data != original:
+                  p.write_bytes(data)
+          PY
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
