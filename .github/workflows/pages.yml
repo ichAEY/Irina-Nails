@@ -87,7 +87,7 @@ jobs:
               gallery:(old.images?.gallery||[]).map(x=>({...x,src:fixImage(x.src)}))
             },
             services:{groups},
-            i18n:{localLocale:"ru",locales:[{code:"ru",label:"RU"}],translations:{}},
+            i18n:{localLocale:"ru",locales:[{code:"ru",label:"RU"},{code:"en",label:"EN"}],translations:{en:{}}},
             reviews:[],
             promotions:old.promotions||[],
             amenities:[],
