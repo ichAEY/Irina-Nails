@@ -1,4 +1,4 @@
-name: Deploy TANEM site
+name: Quality and Pages
 
 on:
   push:
@@ -17,94 +17,105 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_BASE_PATH: /Irina-Nails
     steps:
-      - name: Checkout customer data
-        uses: actions/checkout@v4
+      - name: Checkout client repository
+        uses: actions/checkout@v5
 
-      - name: Checkout exact TANEM template
-        run: |
-          git clone https://github.com/ichAEY/claytone-current.git template
-          git -C template checkout 89647b7d61ebcdfd43f74de2afa4d81b3dfb0194
+      - name: Checkout current TANEM master template
+        uses: actions/checkout@v5
+        with:
+          repository: ichAEY/Shablon-For-Only-Masters
+          ref: main
+          path: template
 
-      - name: Apply customer data and assets
+      - name: Preserve existing client photos
         run: |
-          cp site-data.mjs template/site-data.mjs
-          cp scripts/customize-site.mjs template/scripts/customize-site.mjs
-          cp favicon.svg template/public/favicon.svg
-          printf '' > template/public/noop.js
-          mkdir -p template/public/assets
-          cp assets/*.webp template/public/assets/
+          mkdir -p template/public/assets/client
+          cp -a assets/. template/public/assets/client/
+
+      - name: Convert legacy client data to current template
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { pathToFileURL } from 'node:url';
+          const old = (await import(pathToFileURL(process.cwd() + '/site-data.mjs'))).default;
+          const base = `\${process.env.NEXT_PUBLIC_BASE_PATH || ""}`;
+          const fixImage = (p) => p ? `\${base}/assets/client/\${p.split('/').pop()}` : "";
+          const groups = [];
+          if (old.services?.manicure?.length) groups.push({id:"manicure",label:"Маникюр",services:old.services.manicure});
+          if (old.services?.pedicure?.length) groups.push({id:"pedicure",label:"Педикюр",services:old.services.pedicure});
+          const channels = [];
+          if (old.contacts?.personalTelegramUrl) channels.push({type:"telegram",label:"Telegram",url:old.contacts.personalTelegramUrl});
+          if (old.extraContacts?.whatsappUrl) channels.push({type:"whatsapp",label:"WhatsApp",url:old.extraContacts.whatsappUrl});
+          if (old.extraContacts?.vkUrl) channels.push({type:"vk",label:"VK",url:old.extraContacts.vkUrl});
+          const data = {
+            basePath: base,
+            template:{specialty:"nails",bookingProvider:"",reviewSource:""},
+            brand:old.brand,
+            master:{
+              ...old.master,
+              heroTitle:"",
+              heroEmphasis:"эксперт по маникюру и педикюру",
+              heroCaption:old.brand?.subtitle || "Мастер маникюра и педикюра",
+              imageAlt:old.master?.profession || "мастер маникюра и педикюра",
+              visitMotto:"",
+              experienceYears:old.master?.experienceYears ? Number(old.master.experienceYears) : null,
+              aboutLead:"",
+              aboutParagraphs:[],
+              skills:[]
+            },
+            location:{
+              ...old.location,
+              country:"Россия",countryCode:"RU",timeZone:"Europe/Moscow",
+              openTime:(old.location?.schedule?.match(/(\d{2}:\d{2})/)||[])[1]||"10:00",
+              closeTime:(old.location?.schedule?.match(/(\d{2}:\d{2})[^\d]+(\d{2}:\d{2})/)||[])[2]||"22:00"
+            },
+            contacts:{phoneDisplay:old.contacts?.phoneDisplay||"",phoneHref:old.contacts?.phoneHref||"",channels,messenger:null},
+            links:{
+              bookingUrl:old.links?.bookingUrl||"",reviewsUrl:old.links?.reviewsUrl||"",mapUrl:old.links?.mapUrl||"",
+              routeUrl:old.links?.routeUrl||old.links?.mapUrl||"",mobileMapEmbedUrl:"about:blank",desktopMapEmbedUrl:"about:blank",
+              yandexMapHrefMatch:old.links?.yandexMapHrefMatch||""
+            },
+            reputation:old.reputation||{rating:"",reviewCount:""},
+            images:{
+              logo:"",portrait:fixImage(old.images?.portrait),portraitDesktop:fixImage(old.images?.portrait),
+              about:fixImage(old.images?.about),favicon:`\${base}/favicon-source.png`,
+              heroDecoration:`\${base}/assets/template/hair-tools.png`,
+              beforeAfter:(old.images?.beforeAfter||[]).map(x=>({...x,src:fixImage(x.src)})),
+              gallery:(old.images?.gallery||[]).map(x=>({...x,src:fixImage(x.src)}))
+            },
+            services:{groups},
+            i18n:{localLocale:"ru",locales:[{code:"ru",label:"RU"}],translations:{}},
+            reviews:[],
+            promotions:old.promotions||[],
+            amenities:[],
+            seo:{siteUrl:`https://ichaey.github.io/Irina-Nails/`,title:old.seo?.title||old.brand?.name||"",description:old.seo?.description||"",keywords:old.seo?.keywords||[],locale:"ru_RU"},
+            analytics:old.analytics||{yandexMetrikaId:""}
+          };
+          fs.writeFileSync('template/site-data.mjs', 'export default ' + JSON.stringify(data,null,2) + ';\n');
+          NODE
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: template/package-lock.json
 
-      - name: Install exact template dependencies
-        working-directory: template
-        run: npm ci
-
-      - name: Generate customer site
+      - name: Build current template
         working-directory: template
         run: |
-          node scripts/generate-site.mjs
-          node scripts/customize-site.mjs
-          rm -rf public/_next
-
-      - name: Ignore hosting-only TypeScript files
-        working-directory: template
-        run: |
-          node - <<'NODE'
-          const fs = require('fs');
-          const path = 'tsconfig.json';
-          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
-          config.exclude = [
-            ...(config.exclude || []),
-            'db/**',
-            'worker/**',
-            'examples/**',
-            'build/**',
-            'drizzle/**',
-            'drizzle.config.ts',
-            'vite.config.ts'
-          ];
-          fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
-          NODE
-
-      - name: Build static site
-        working-directory: template
-        run: npx next build
-
-      - name: Fix GitHub Pages project paths
-        working-directory: template
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          prefix = '/Irina-Nails'
-          replacements = {
-              b'/_next/': (prefix + '/_next/').encode(),
-              b'/assets/': (prefix + '/assets/').encode(),
-              b'/favicon.svg': (prefix + '/favicon.svg').encode(),
-              b'/noop.js': (prefix + '/noop.js').encode(),
-          }
-          for p in Path('out').rglob('*'):
-              if not p.is_file():
-                  continue
-              data = p.read_bytes()
-              original = data
-              for old, new in replacements.items():
-                  data = data.replace(old, new)
-              if data != original:
-                  p.write_bytes(data)
-          PY
+          npm ci
+          npm run lint
+          npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: template/out
 
