@@ -94,6 +94,18 @@ jobs:
             seo:{siteUrl:`https://ichaey.github.io/Irina-Nails/`,title:old.seo?.title||old.brand?.name||"",description:old.seo?.description||"",keywords:old.seo?.keywords||[],locale:"ru_RU"},
             analytics:old.analytics||{yandexMetrikaId:""}
           };
+          const rules = await import(pathToFileURL(process.cwd() + '/template/template-rules.mjs'));
+          const first = String(data.master?.name || '').trim().split(/\s+/)[0] || '';
+          const about = [
+            `Я ${first} — эксперт по маникюру и педикюру.`,
+            "Выполняю маникюр и педикюр, наращивание и коррекцию ногтей.",
+            "Работаю со стерильными инструментами и уделяю внимание аккуратности, форме и качеству результата.",
+            "Маникюр и педикюр","Наращивание и коррекция","Стерильные инструменты"
+          ];
+          data.i18n.locales=[{code:"ru",label:"RU"},{code:"en",label:"EN"}];
+          data.i18n.translations={en:{}};
+          const temp={...data,master:{...data.master,aboutLead:about[0],aboutParagraphs:about.slice(1,3),skills:about.slice(3)}};
+          for (const key of rules.clientTranslationKeys(temp)) data.i18n.translations.en[key]=key;
           fs.writeFileSync('template/site-data.mjs', 'export default ' + JSON.stringify(data,null,2) + ';\n');
           NODE
 
