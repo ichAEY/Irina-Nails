@@ -56,6 +56,7 @@ jobs:
             brand:old.brand,
             master:{
               ...old.master,
+              instrumental: old.master?.instrumental || old.master?.name || "",
               heroTitle:"",
               heroEmphasis:"эксперт по маникюру и педикюру",
               heroCaption:old.brand?.subtitle || "Мастер маникюра и педикюра",
